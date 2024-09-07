@@ -4,6 +4,8 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include "timer.h"
+
 #define GPU_RUNS 300
 #define MAX_N 500000000
 
@@ -11,9 +13,9 @@ __global__ void Kernel(float *x) {
   // fill me
 }
 
-void run_cpu(unsigned int N, float *in, float *out);
+void run_cpu(unsigned int N, float *in, float *out, struct timeval *t_start);
 void run_gpu(unsigned int N, float *h_in, float *h_out, float *d_in,
-             float *d_out);
+             float *d_out, struct timeval *t_start);
 void validate(unsigned int N, float *cpu_out, float *gpu_out);
 
 int main(int argc, char **argv) {
@@ -41,8 +43,11 @@ int main(int argc, char **argv) {
     h_in[i] = (float)i;
   }
 
+  // Timer
+  struct timeval t_start;
+
   // Run sequentially
-  run_cpu(N, h_in, h_out_cpu);
+  run_cpu(N, h_in, h_out_cpu, &t_start);
 
   // Allocate device memory
   float *d_in;
@@ -56,11 +61,13 @@ int main(int argc, char **argv) {
   free(d_out);
 }
 
-void run_cpu(unsigned int N, float *in, float *out) {
-  // time start
-  for (unsigned int i; i < N; ++i) {
+void run_cpu(unsigned int N, float *in, float *out, struct timeval *t_start) {
+  timer_start(t_start);
+
+  for (unsigned int i = 0; i < N; ++i) {
     out[i] = powf((in[i] / (in[i] - 2.3)), 3.0);
   }
   printf("Done, last element: %f\n", out[N - 1]);
-  // time end
+  timer_end_cpu(t_start);
 }
+
