@@ -29,11 +29,13 @@ int main(int argc, char **argv) {
     printf("Size of array too big. Maximal size is %d.\n", MAX_N);
     exit(1);
   }
+  
+  unsigned int mem_size = N * sizeof(float);
 
   // Allocating host memory
-  float *h_in;
-  float *h_out_cpu;
-  float *h_out_gpu;
+  float *h_in      = (float*) malloc(mem_size);
+  float *h_out_cpu = (float*) malloc(mem_size);
+  float *h_out_gpu = (float*) malloc(mem_size);
 
   for (unsigned int i = 0; i < N; ++i) {
     h_in[i] = (float)i;

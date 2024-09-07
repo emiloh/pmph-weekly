@@ -1,4 +1,4 @@
-COMPILER   = ncc
+COMPILER   = nvcc
 FLAGS      = -O3
 SOURCE     = wa1-task3.cu 
 EXECUTABLE = wa1-task3
