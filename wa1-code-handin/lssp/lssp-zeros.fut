@@ -26,6 +26,9 @@
 -- output {
 --    0
 --}
+--
+-- compiled input @ lssp-data.in
+-- output @ data-zeros.out
 
 
 

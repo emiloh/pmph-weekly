@@ -28,7 +28,9 @@
 -- output {
 --  0
 -- }
-
+-- 
+-- compiled input @ lssp-data.in
+-- output @ data-sorted.out
 
 import "lssp"
 import "lssp-seq"
