@@ -21,6 +21,14 @@
 -- output {
 --  1
 -- }
+-- compiled input {
+--   empty([0]i32)
+-- }
+-- output {
+--  0
+-- }
+
+
 
 
 import "lssp"
