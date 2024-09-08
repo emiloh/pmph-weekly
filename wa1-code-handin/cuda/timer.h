@@ -12,18 +12,19 @@ void timer_start(struct timeval *t_start)
 	gettimeofday(t_start, NULL);
 }
 
-void timer_end_cpu(struct timeval *t_start)
+double timer_end_cpu(struct timeval *t_start)
 {
 	struct timeval t_end;
 	gettimeofday(&t_end, NULL);
 	
-	long int diff = (t_end.tv_usec - t_start->tv_usec) + MICROSEC_PER_SEC * (t_end.tv_sec - t_start->tv_sec);
+	long int elapsed_microsecs = (t_end.tv_usec - t_start->tv_usec) + MICROSEC_PER_SEC * (t_end.tv_sec - t_start->tv_sec);
 
-	printf("CPU elapsed time (microseconds): %ld\n", diff);
+	printf("CPU elapsed time (microseconds): %ld\n", elapsed_microsecs);
 
+	return elapsed_microsecs;
 }
 
-void timer_end_gpu(struct timeval *t_start, unsigned int N, unsigned int GPU_RUNS)
+double timer_end_gpu(struct timeval *t_start, unsigned int N, unsigned int GPU_RUNS)
 {
 	struct timeval t_end;
 	gettimeofday(&t_end, NULL);
@@ -35,6 +36,8 @@ void timer_end_gpu(struct timeval *t_start, unsigned int N, unsigned int GPU_RUN
 	double GBpS    = (2.0 * N * 4.0) / (elapsed_microsecs * 1000);
 	
 	printf("Kernel average elapsed time (microseconds): %f. Throughput (GB/sec): %f \n", elapsed_microsecs, GBpS);
+
+	return elapsed_microsecs;
 }
 
 #endif

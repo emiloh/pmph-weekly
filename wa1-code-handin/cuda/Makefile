@@ -15,7 +15,7 @@ compile:
 	$(COMPILER) $(FLAGS) -o $(EXECUTABLE) $(SOURCE) 
 
 run: 
-	./$(EXECUTABLE)
+	./$(EXECUTABLE) $(DEFAULT)
 
 run_specific:
 	./$(EXECUTABLE) $(N) 

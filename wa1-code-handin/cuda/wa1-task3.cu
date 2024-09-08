@@ -19,8 +19,8 @@ __global__ void Kernel(float *in, float *out, unsigned int N) {
   }
 }
 
-void run_cpu(unsigned int N, float *in, float *out, struct timeval *t_start);
-void run_gpu(unsigned int N, float *d_in, float *d_out,
+double run_cpu(unsigned int N, float *in, float *out, struct timeval *t_start);
+double run_gpu(unsigned int N, float *d_in, float *d_out,
              struct timeval *t_start, unsigned int gpu_runs);
 void validate(unsigned int N, float *cpu_out, float *gpu_out);
 
@@ -53,7 +53,7 @@ int main(int argc, char **argv) {
   struct timeval t_start;
 
   // Run sequentially
-  run_cpu(N, h_in, h_out_cpu, &t_start);
+  double elapsed_cpu = run_cpu(N, h_in, h_out_cpu, &t_start);
 
   // Allocate device memory
   float *d_in;
@@ -65,7 +65,7 @@ int main(int argc, char **argv) {
   // Copy memory from host to device
   cudaMemcpy(d_in, h_in, mem_size, cudaMemcpyHostToDevice);
 
-  run_gpu(N, d_in, d_out, &t_start, GPU_RUNS);
+  double elapsed_gpu = run_gpu(N, d_in, d_out, &t_start, GPU_RUNS);
 
   // Check for errors
   cudaError_t gpu_code = cudaPeekAtLastError();
@@ -78,6 +78,9 @@ int main(int argc, char **argv) {
 
   validate(N, h_out_cpu, h_out_gpu);
 
+  // Acceleration
+  printf("Acceleration: %.1fx\n", (elapsed_cpu/elapsed_gpu)); 
+
   // Free memory
   free(h_in);
   free(h_out_cpu);
@@ -86,36 +89,37 @@ int main(int argc, char **argv) {
   cudaFree(d_out);
 }
 
-void run_cpu(unsigned int N, float *in, float *out, struct timeval *t_start) {
+double run_cpu(unsigned int N, float *in, float *out, struct timeval *t_start) {
   timer_start(t_start);
 
   for (unsigned int i = 0; i < N; ++i) {
-    out[i] = powf((in[i] / (in[i] - 2.3)), 3.0);
+    float temp = in[i] / (in[i] - 2.3);
+    out[i] = temp * temp * temp;
   }
   
-  timer_end_cpu(t_start);
+  return timer_end_cpu(t_start);
 }
 
-void run_gpu(unsigned int N, float *in, float *out, struct timeval *t_start,
+double run_gpu(unsigned int N, float *in, float *out, struct timeval *t_start,
              unsigned int gpu_runs) {
   timer_start(t_start);
 
   for (unsigned int i = 0; i < gpu_runs; ++i) {
     // Setup grid and blocks
-    unsigned int blocks = 512;
-    unsigned int num_blocks = (N + blocks - 1) / blocks;
-    dim3 block(blocks, 1, 1), grid(num_blocks, 1, 1);
+    unsigned int block_size = 512;
+    unsigned int num_blocks = (N + block_size - 1) / block_size;
+    dim3 block(block_size, 1, 1), grid(num_blocks, 1, 1);
 
     Kernel<<<grid, block>>>(in, out, N);
   }
 
   cudaDeviceSynchronize();
 
-  timer_end_gpu(t_start, N, GPU_RUNS);
+  return timer_end_gpu(t_start, N, GPU_RUNS);
 }
 
 void validate(unsigned int N, float *cpu_out, float *gpu_out) {
-  float epsilon = 1.0e-5;
+  float epsilon = 1.0e-10;
 
   for (unsigned int i = 0; i < N; ++i) {
     if (fabs(gpu_out[i] - cpu_out[i]) > epsilon) {
