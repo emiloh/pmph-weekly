@@ -32,9 +32,9 @@ void timer_end_gpu(struct timeval *t_start, unsigned int N, unsigned int GPU_RUN
 	double elapsed_microsecs = diff/GPU_RUNS;
 
 	// numerator is multiplied with 2, to account for 1 read and 1 write
-	double GBpS    = (2.0 * N * 4.0) / (elapsed_microsec * 1000)
+	double GBpS    = (2.0 * N * 4.0) / (elapsed_microsecs * 1000);
 	
-	printf("Kernel average elapsed time (microseconds): %f. Throughput (GB/sec): %f \n", elapsed, GBpS);
+	printf("Kernel average elapsed time (microseconds): %f. Throughput (GB/sec): %f \n", elapsed_microsecs, GBpS);
 }
 
 #endif

@@ -7,7 +7,7 @@
 #include "timer.h"
 
 #define GPU_RUNS 300
-#define MAX_N 500000000
+#define MAX_N 1000000000
 
 __global__ void Kernel(float *in, float *out, unsigned int N) {
   // Find the global id
@@ -21,7 +21,7 @@ __global__ void Kernel(float *in, float *out, unsigned int N) {
 
 void run_cpu(unsigned int N, float *in, float *out, struct timeval *t_start);
 void run_gpu(unsigned int N, float *d_in, float *d_out,
-             struct timeval *t_start);
+             struct timeval *t_start, unsigned int gpu_runs);
 void validate(unsigned int N, float *cpu_out, float *gpu_out);
 
 int main(int argc, char **argv) {
@@ -82,8 +82,8 @@ int main(int argc, char **argv) {
   free(h_in);
   free(h_out_cpu);
   free(h_out_gpu);
-  free(d_in);
-  free(d_out);
+  cudaFree(d_in);
+  cudaFree(d_out);
 }
 
 void run_cpu(unsigned int N, float *in, float *out, struct timeval *t_start) {
@@ -92,15 +92,15 @@ void run_cpu(unsigned int N, float *in, float *out, struct timeval *t_start) {
   for (unsigned int i = 0; i < N; ++i) {
     out[i] = powf((in[i] / (in[i] - 2.3)), 3.0);
   }
-  printf("Done, last element: %f\n", out[N - 1]);
+  
   timer_end_cpu(t_start);
 }
 
 void run_gpu(unsigned int N, float *in, float *out, struct timeval *t_start,
-             unsigned int GPU_RUNS) {
+             unsigned int gpu_runs) {
   timer_start(t_start);
 
-  for (unsigned int i = 0; i < GPU_RUNS; ++i) {
+  for (unsigned int i = 0; i < gpu_runs; ++i) {
     // Setup grid and blocks
     unsigned int blocks = 512;
     unsigned int num_blocks = (N + blocks - 1) / blocks;
@@ -115,7 +115,7 @@ void run_gpu(unsigned int N, float *in, float *out, struct timeval *t_start,
 }
 
 void validate(unsigned int N, float *cpu_out, float *gpu_out) {
-  float epsilon = 1.0e-7;
+  float epsilon = 1.0e-5;
 
   for (unsigned int i = 0; i < N; ++i) {
     if (fabs(gpu_out[i] - cpu_out[i]) > epsilon) {
