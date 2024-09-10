@@ -7,6 +7,9 @@
 --   [2.0f32, 1.0f32, 0.0f32, 3.0f32]
 -- }
 -- output { [3.0f32, 0.0f32, -4.0f32, 6.0f32, 9.0f32] }
+--
+-- compiled input @ spMatVectData.in
+-- output @ spMatVectData.out
 
 let spMatVctMult [vct_len][num_rows]
                  (mat: [](i64,f32))
