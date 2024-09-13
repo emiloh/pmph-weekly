@@ -36,8 +36,60 @@ let primesFlat (n : i64) : []i64 =
       --  where `p \in sq_primes`.
       -- Also note that `not_primes` has flat length equal to `flat_size`
       --  and the shape of `composite` is `mult_lens`. 
-      
-      let not_primes = replicate flat_size 0
+
+      ------------- Helpers -------------------------------
+
+      let rotate [n] 'a (ne: a) (arr: [n] a) : [n] a = 
+	map (\i -> if i == 0 then ne else arr[i-1]) (iota n)
+
+      let scan_exc [n] 'a (op: a -> a -> a) (ne: a) (arr: [n] a) : [n] a = 
+	scan op ne (rotate ne arr)
+
+	
+      let sgmScan [n] 't
+		(op: t -> t -> t)
+		(ne: t)
+		(flags: [n]bool)
+		(vals: [n]t)
+		: [n]t =
+	scan (\(f1, v1) (f2, v2) -> (f1 || f2, if f2 then v2 else op v1 v2))
+	(false, ne)
+	(zip flags vals)
+	|> unzip
+	|> (.1)
+
+      let sgmScan_exc [n] 'a (op: a -> a -> a) (ne: a) (flags: [n] bool) (vals: [n] a) : [n] a =
+	scan_exc (\(f1, v1) (f2, v2) -> (f1 || f2, if f2 then v2 else op v1 v2))
+	(false, ne)
+	(zip flags vals)
+	|> unzip
+	|> (.1)
+
+      ------------- Helpers end ---------------------------
+     
+     let composite = 
+
+	 -- Distribute iota 
+	 let indicies = scan_exc (+) 0 mult_lens
+	 let trues = map (\_ -> true) indicies
+	 let flag = scatter (replicate flat_size false) indicies trues
+	 let one_arr = replicate flat_size 1
+	 let iot = sgmScan_exc (+) 0 flag one_arr
+
+	 -- Distribute map 
+	 let arr = map (+ 2) iot
+
+	 -- Distribute replicate
+	 let vals = scatter (replicate flat_size 0) indicies sq_primes
+	 let ps = sgmScan (+) 0 flag vals
+
+	 -- Distrubute map
+	 let res = map2 (*) ps arr
+
+	 in res
+
+    
+      let not_primes = composite
 
       -- If not_primes is correctly computed, then the remaining
       -- code is correct and will do the job of computing the prime
