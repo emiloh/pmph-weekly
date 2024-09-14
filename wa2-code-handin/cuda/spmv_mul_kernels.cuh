@@ -4,11 +4,16 @@
 __global__ void
 replicate0(int tot_size, char* flags_d) {
     // TODO: fill in your implementation here ...
+    for(unsigned int i = 0; i < tot_size; ++i)
+    {
+    	flags_d[i] = 0;
+    }
 }
 
 __global__ void
 mkFlags(int mat_rows, int* mat_shp_sc_d, char* flags_d) {
     // TODO: fill in your implementation here ...
+   
 }
 
 __global__ void
