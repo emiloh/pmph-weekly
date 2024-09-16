@@ -7,11 +7,11 @@
  * Naive memcpy kernel, for the purpose of comparing with
  * a more "realistic" bandwidth number.
  */
-__global__ void naiveMemcpy(int* d_out, int* d_inp, const uint32_t N) {
-    uint32_t gid = blockIdx.x * blockDim.x + threadIdx.x;
-    if(gid < N) {
-        d_out[gid] = d_inp[gid];
-    }
+__global__ void naiveMemcpy(int *d_out, int *d_inp, const uint32_t N) {
+  uint32_t gid = blockIdx.x * blockDim.x + threadIdx.x;
+  if (gid < N) {
+    d_out[gid] = d_inp[gid];
+  }
 }
 
 /**
@@ -19,19 +19,25 @@ __global__ void naiveMemcpy(int* d_out, int* d_inp, const uint32_t N) {
  *  numeric-basic types, such as int32_t, int64_t,
  *  float, double, etc.
  */
-template<class T>
-class Add {
-  public:
-    typedef T InpElTp;
-    typedef T RedElTp;
-    static const bool commutative = true;
-    static __device__ __host__ inline T identInp()                    { return (T)0;    }
-    static __device__ __host__ inline T mapFun(const T& el)           { return el;      }
-    static __device__ __host__ inline T identity()                    { return (T)0;    }
-    static __device__ __host__ inline T apply(const T t1, const T t2) { return t1 + t2; }
+template <class T> class Add {
+public:
+  typedef T InpElTp;
+  typedef T RedElTp;
+  static const bool commutative = true;
+  static __device__ __host__ inline T identInp() { return (T)0; }
+  static __device__ __host__ inline T mapFun(const T &el) { return el; }
+  static __device__ __host__ inline T identity() { return (T)0; }
+  static __device__ __host__ inline T apply(const T t1, const T t2) {
+    return t1 + t2;
+  }
 
-    static __device__ __host__ inline bool equals(const T t1, const T t2) { return (t1 == t2); }
-    static __device__ __host__ inline T remVolatile(volatile T& t)    { T res = t; return res; }
+  static __device__ __host__ inline bool equals(const T t1, const T t2) {
+    return (t1 == t2);
+  }
+  static __device__ __host__ inline T remVolatile(volatile T &t) {
+    T res = t;
+    return res;
+  }
 };
 
 /***************************************************/
@@ -42,15 +48,23 @@ class Add {
  * Generic data-type that semantically tuples template
  * `T` with a flag, which is represented as a char.
  */
-template<class T>
-class ValFlg {
-  public:
-    T    v;
-    char f;
-    __device__ __host__ inline ValFlg() { f = 0; }
-    __device__ __host__ inline ValFlg(const char& f1, const T& v1) { v = v1; f = f1; }
-    __device__ __host__ inline ValFlg(const ValFlg& vf) { v = vf.v; f = vf.f; }
-    __device__ __host__ inline void operator=(const ValFlg& vf) volatile { v = vf.v; f = vf.f; }
+template <class T> class ValFlg {
+public:
+  T v;
+  char f;
+  __device__ __host__ inline ValFlg() { f = 0; }
+  __device__ __host__ inline ValFlg(const char &f1, const T &v1) {
+    v = v1;
+    f = f1;
+  }
+  __device__ __host__ inline ValFlg(const ValFlg &vf) {
+    v = vf.v;
+    f = vf.f;
+  }
+  __device__ __host__ inline void operator=(const ValFlg &vf) volatile {
+    v = vf.v;
+    f = vf.f;
+  }
 };
 
 /**
@@ -59,27 +73,28 @@ class ValFlg {
  * to the corresponding segmented operator that works over
  * flag-value tuples.
  */
-template<class OP>
-class LiftOP {
-  public:
-    typedef ValFlg<typename OP::RedElTp> RedElTp;
-    static __device__ __host__ inline RedElTp identity() {
-        return RedElTp( (char)0, OP::identity());
-    }
+template <class OP> class LiftOP {
+public:
+  typedef ValFlg<typename OP::RedElTp> RedElTp;
+  static __device__ __host__ inline RedElTp identity() {
+    return RedElTp((char)0, OP::identity());
+  }
 
-    static __device__ __host__ inline RedElTp
-    apply(const RedElTp t1, const RedElTp t2) {
-        typename OP::RedElTp v;
-        char f = t1.f | t2.f;
-        if (t2.f != 0) v = t2.v;
-        else v = OP::apply(t1.v, t2.v);
-        return RedElTp(f, v);
-    }
+  static __device__ __host__ inline RedElTp apply(const RedElTp t1,
+                                                  const RedElTp t2) {
+    typename OP::RedElTp v;
+    char f = t1.f | t2.f;
+    if (t2.f != 0)
+      v = t2.v;
+    else
+      v = OP::apply(t1.v, t2.v);
+    return RedElTp(f, v);
+  }
 
-    static __device__ __host__ inline bool
-    equals(const RedElTp t1, const RedElTp t2) {
-        return ( (t1.f == t2.f) && OP::equals(t1.v, t2.v) );
-    }
+  static __device__ __host__ inline bool equals(const RedElTp t1,
+                                                const RedElTp t2) {
+    return ((t1.f == t2.f) && OP::equals(t1.v, t2.v));
+  }
 };
 
 /*****************************************/
@@ -93,24 +108,40 @@ class LiftOP {
  * work with the generic skeletons of reduce, scan, etc.
  */
 class MyInt4 {
-  public:
-    int x; int y; int z; int w;
+public:
+  int x;
+  int y;
+  int z;
+  int w;
 
-    __device__ __host__ inline MyInt4() {
-        x = 0; y = 0; z = 0; w = 0;
-    }
+  __device__ __host__ inline MyInt4() {
+    x = 0;
+    y = 0;
+    z = 0;
+    w = 0;
+  }
 
-    __device__ __host__ inline MyInt4(const int& a, const int& b, const int& c, const int& d) {
-        x = a; y = b; z = c; w = d;
-    }
+  __device__ __host__ inline MyInt4(const int &a, const int &b, const int &c,
+                                    const int &d) {
+    x = a;
+    y = b;
+    z = c;
+    w = d;
+  }
 
-    __device__ __host__ inline MyInt4(const MyInt4& i4) {
-        x = i4.x; y = i4.y; z = i4.z; w = i4.w;
-    }
+  __device__ __host__ inline MyInt4(const MyInt4 &i4) {
+    x = i4.x;
+    y = i4.y;
+    z = i4.z;
+    w = i4.w;
+  }
 
-    __device__ __host__ inline void operator=(const MyInt4& i4) volatile {
-        x = i4.x; y = i4.y; z = i4.z; w = i4.w;
-    }
+  __device__ __host__ inline void operator=(const MyInt4 &i4) volatile {
+    x = i4.x;
+    y = i4.y;
+    z = i4.z;
+    w = i4.w;
+  }
 };
 
 /**
@@ -118,31 +149,39 @@ class MyInt4 {
  * defined skeletons of reduce, scan, etc.
  */
 class Mssp {
-  public:
-    typedef int32_t InpElTp;
-    typedef MyInt4  RedElTp;
-    static const bool commutative = false;
-    static __device__ __host__ inline InpElTp identInp(){ return 0; }
-    static __device__ __host__ inline RedElTp mapFun(const InpElTp& el) {
-        int32_t x = max(0, el);
-        return MyInt4(x, x, x, el);
-    }
-    static __device__ __host__ inline MyInt4 identity() { return MyInt4(0,0,0,0); }
-    static __device__ __host__ inline MyInt4 apply(volatile MyInt4& t1, volatile MyInt4& t2) {
-        int mss = max( t1.z+t2.y, max(t1.x, t2.x) );
-        int mis = max( t1.y, t1.w + t2.y);
-        int mcs = max( t2.z, t2.w + t1.z);
-        int t   = t1.w + t2.w;
-        return MyInt4(mss, mis, mcs, t);
-    }
+public:
+  typedef int32_t InpElTp;
+  typedef MyInt4 RedElTp;
+  static const bool commutative = false;
+  static __device__ __host__ inline InpElTp identInp() { return 0; }
+  static __device__ __host__ inline RedElTp mapFun(const InpElTp &el) {
+    int32_t x = max(0, el);
+    return MyInt4(x, x, x, el);
+  }
+  static __device__ __host__ inline MyInt4 identity() {
+    return MyInt4(0, 0, 0, 0);
+  }
+  static __device__ __host__ inline MyInt4 apply(volatile MyInt4 &t1,
+                                                 volatile MyInt4 &t2) {
+    int mss = max(t1.z + t2.y, max(t1.x, t2.x));
+    int mis = max(t1.y, t1.w + t2.y);
+    int mcs = max(t2.z, t2.w + t1.z);
+    int t = t1.w + t2.w;
+    return MyInt4(mss, mis, mcs, t);
+  }
 
-    static __device__ __host__ inline MyInt4 remVolatile(volatile MyInt4& t) {
-        MyInt4 res; res.x = t.x; res.y = t.y; res.z = t.z; res.w = t.w; return res;
-    }
+  static __device__ __host__ inline MyInt4 remVolatile(volatile MyInt4 &t) {
+    MyInt4 res;
+    res.x = t.x;
+    res.y = t.y;
+    res.z = t.z;
+    res.w = t.w;
+    return res;
+  }
 
-    static __device__ __host__ inline bool equals(MyInt4& t1, MyInt4& t2) {
-        return (t1.x == t2.x && t1.y == t2.y && t1.z == t2.z && t1.w == t2.w);
-    }
+  static __device__ __host__ inline bool equals(MyInt4 &t1, MyInt4 &t2) {
+    return (t1.x == t2.x && t1.y == t2.y && t1.z == t2.z && t1.w == t2.w);
+  }
 };
 
 /***************************************/
@@ -176,18 +215,20 @@ class Mssp {
  *     all threads will reach the barrier, resulting in incorrect
  *     results.)
  */
-template<class OP>
+template <class OP>
 __device__ inline typename OP::RedElTp
-scanIncWarp( volatile typename OP::RedElTp* ptr, const unsigned int idx ) {
-    const unsigned int lane = idx & (WARP-1);
+scanIncWarp(volatile typename OP::RedElTp *ptr, const unsigned int idx) {
+  const unsigned int lane = idx & (WARP - 1);
 
-    if(lane==0) {
-        #pragma unroll
-        for(int i=1; i<WARP; i++) {
-            ptr[idx+i] = OP::apply(ptr[idx+i-1], ptr[idx+i]);
-        }
+#pragma unroll
+  for (unsigned int d = 0; d < lgWARP - 1; ++i) {
+    h = 2 << d;
+    if (idx >= h) {
+      ptr[idx] = ptr[idx - h] + ptr[idx];
     }
-    return OP::remVolatile(ptr[idx]);
+  }
+
+  return OP::remVolatile(ptr[idx]);
 }
 
 /**
@@ -203,34 +244,37 @@ scanIncWarp( volatile typename OP::RedElTp* ptr, const unsigned int idx ) {
  * Find and fix the bug (race condition) that manifests
  *  only when the CUDA block size is set to 1024.
  */
-template<class OP>
+template <class OP>
 __device__ inline typename OP::RedElTp
-scanIncBlock(volatile typename OP::RedElTp* ptr, const unsigned int idx) {
-    const unsigned int lane   = idx & (WARP-1);
-    const unsigned int warpid = idx >> lgWARP;
+scanIncBlock(volatile typename OP::RedElTp *ptr, const unsigned int idx) {
+  const unsigned int lane = idx & (WARP - 1);
+  const unsigned int warpid = idx >> lgWARP;
 
-    // 1. perform scan at warp level. `scanIncWarp` computes its result in-place
-    //    and also returns the per-thread result.
-    typename OP::RedElTp res = scanIncWarp<OP>(ptr,idx);
-    __syncthreads();
+  // 1. perform scan at warp level. `scanIncWarp` computes its result in-place
+  //    and also returns the per-thread result.
+  typename OP::RedElTp res = scanIncWarp<OP>(ptr, idx);
+  __syncthreads();
 
-    // 2. place the end-of-warp results in
-    //   the first warp. This works because
-    //   warp size = 32, and
-    //   max block size = 32^2 = 1024
-    if (lane == (WARP-1)) { ptr[warpid] = OP::remVolatile(ptr[idx]); }
-    __syncthreads();
+  // 2. place the end-of-warp results in
+  //   the first warp. This works because
+  //   warp size = 32, and
+  //   max block size = 32^2 = 1024
+  if (lane == (WARP - 1)) {
+    ptr[warpid] = OP::remVolatile(ptr[idx]);
+  }
+  __syncthreads();
 
-    // 3. scan again the first warp.
-    if (warpid == 0) scanIncWarp<OP>(ptr, idx);
-    __syncthreads();
+  // 3. scan again the first warp.
+  if (warpid == 0)
+    scanIncWarp<OP>(ptr, idx);
+  __syncthreads();
 
-    // 4. accumulate results from previous step.
-    if (warpid > 0) {
-        res = OP::apply(ptr[warpid-1], res);
-    }
+  // 4. accumulate results from previous step.
+  if (warpid > 0) {
+    res = OP::apply(ptr[warpid - 1], res);
+  }
 
-    return res;
+  return res;
 }
 
 /********************************************/
@@ -241,54 +285,54 @@ scanIncBlock(volatile typename OP::RedElTp* ptr, const unsigned int idx) {
  * Kernel to implement the naive reduce, which uses neither
  *   efficient sequentialization, nor fast, shared memory.
  */
-template<class OP>
-__global__ void
-redNaiveKernel1( typename OP::RedElTp* d_out
-               , typename OP::InpElTp* d_in
-               , const uint32_t N
-               , const uint32_t T
-) {
-    uint32_t gid = blockIdx.x * blockDim.x + threadIdx.x;
-    typename OP::InpElTp el = OP::identInp();
-    uint32_t ind = 2*gid;
-    if(ind < N) el = d_in[ind];
-    typename OP::RedElTp el_red1 = OP::mapFun(el);
-    el = OP::identInp();
-    ind = ind + 1;
-    if(ind < N) el = d_in[ind];
-    typename OP::RedElTp el_red2 = OP::mapFun(el);
-    el_red1 = OP::apply(el_red1, el_red2);
-    if(gid < T) d_out[gid] = el_red1;
+template <class OP>
+__global__ void redNaiveKernel1(typename OP::RedElTp *d_out,
+                                typename OP::InpElTp *d_in, const uint32_t N,
+                                const uint32_t T) {
+  uint32_t gid = blockIdx.x * blockDim.x + threadIdx.x;
+  typename OP::InpElTp el = OP::identInp();
+  uint32_t ind = 2 * gid;
+  if (ind < N)
+    el = d_in[ind];
+  typename OP::RedElTp el_red1 = OP::mapFun(el);
+  el = OP::identInp();
+  ind = ind + 1;
+  if (ind < N)
+    el = d_in[ind];
+  typename OP::RedElTp el_red2 = OP::mapFun(el);
+  el_red1 = OP::apply(el_red1, el_red2);
+  if (gid < T)
+    d_out[gid] = el_red1;
 }
 
 /**
  * Kernel to implement the naive reduce, which uses neither
  *   efficient sequentialization, nor fast, shared memory.
  */
-template<class OP>
+template <class OP>
 __global__ void
-redNaiveKernel2( typename OP::RedElTp* d_out
-               , const uint32_t offs_inp
-               , const uint32_t offs_out
-               , const uint32_t N
-               , const uint32_t T
-) {
-    uint32_t gid = blockIdx.x * blockDim.x + threadIdx.x;
-    typename OP::RedElTp el1 = OP::identity();
-    uint32_t ind = 2*gid;
-    if(ind < N) el1 = d_out[offs_inp + ind];
+redNaiveKernel2(typename OP::RedElTp *d_out, const uint32_t offs_inp,
+                const uint32_t offs_out, const uint32_t N, const uint32_t T) {
+  uint32_t gid = blockIdx.x * blockDim.x + threadIdx.x;
+  typename OP::RedElTp el1 = OP::identity();
+  uint32_t ind = 2 * gid;
+  if (ind < N)
+    el1 = d_out[offs_inp + ind];
 
-    typename OP::RedElTp el2 = OP::identity();
-    ind = ind + 1;
-    if(ind < N) el2 = d_out[offs_inp + ind];
-    el1 = OP::apply(el1, el2);
+  typename OP::RedElTp el2 = OP::identity();
+  ind = ind + 1;
+  if (ind < N)
+    el2 = d_out[offs_inp + ind];
+  el1 = OP::apply(el1, el2);
 
-    if(T==1) { if (threadIdx.x == 0) d_out[0] = el1; }
-    else {
-        if (gid < T) d_out[offs_out + gid] = el1;
-    }
+  if (T == 1) {
+    if (threadIdx.x == 0)
+      d_out[0] = el1;
+  } else {
+    if (gid < T)
+      d_out[offs_out + gid] = el1;
+  }
 }
-
 
 /***********************************************************/
 /*** Reduce Commutative & Non-Commutative Helper Kernels ***/
@@ -301,23 +345,24 @@ redNaiveKernel2( typename OP::RedElTp* d_out
  * This is a helper kernel for implementing the second stage of
  *   a reduction.
  */
-template<class OP>
+template <class OP>
 __global__ void
-redAssoc1Block( typename OP::RedElTp* d_inout   // operates in place; the reduction
-              , uint32_t N                      // result is written in position 0
+redAssoc1Block(typename OP::RedElTp *d_inout // operates in place; the reduction
+               ,
+               uint32_t N // result is written in position 0
 ) {
-    extern __shared__ char sh_mem[];
-    volatile typename OP::RedElTp* shmem_red = (typename OP::RedElTp*)sh_mem;
-    typename OP::RedElTp elm = OP::identity();
-    if(threadIdx.x < N) {
-        elm = d_inout[threadIdx.x];
-    }
-    shmem_red[threadIdx.x] = elm;
-    __syncthreads();
-    elm = scanIncBlock<OP>(shmem_red, threadIdx.x);
-    if (threadIdx.x == blockDim.x-1) {
-        d_inout[0] = elm;
-    }
+  extern __shared__ char sh_mem[];
+  volatile typename OP::RedElTp *shmem_red = (typename OP::RedElTp *)sh_mem;
+  typename OP::RedElTp elm = OP::identity();
+  if (threadIdx.x < N) {
+    elm = d_inout[threadIdx.x];
+  }
+  shmem_red[threadIdx.x] = elm;
+  __syncthreads();
+  elm = scanIncBlock<OP>(shmem_red, threadIdx.x);
+  if (threadIdx.x == blockDim.x - 1) {
+    d_inout[0] = elm;
+  }
 }
 
 /**
@@ -333,49 +378,46 @@ redAssoc1Block( typename OP::RedElTp* d_inout   // operates in place; the reduct
  *   array (having one element per block) can be reduced within
  *   one block with kernel `redAssoc1Block`.
  */
-template<class OP>
-__global__ void
-redCommuKernel( typename OP::RedElTp* d_tmp
-              , typename OP::InpElTp* d_in
-              , uint32_t N
-              , uint32_t T
-) {
-    extern __shared__ char sh_mem[];
-    // shared memory holding the to-be-reduced elements.
-    // The length of `shmem_red` array is the CUDA block size.
-    volatile typename OP::RedElTp* shmem_red = (typename OP::RedElTp*)sh_mem;
-    uint32_t gid = blockIdx.x*blockDim.x + threadIdx.x;
+template <class OP>
+__global__ void redCommuKernel(typename OP::RedElTp *d_tmp,
+                               typename OP::InpElTp *d_in, uint32_t N,
+                               uint32_t T) {
+  extern __shared__ char sh_mem[];
+  // shared memory holding the to-be-reduced elements.
+  // The length of `shmem_red` array is the CUDA block size.
+  volatile typename OP::RedElTp *shmem_red = (typename OP::RedElTp *)sh_mem;
+  uint32_t gid = blockIdx.x * blockDim.x + threadIdx.x;
 
-    // The loop efficiently sequentializes the computation by making
-    // each thread iterate through the input with a stride `T` until
-    // all array elements have been processed. The stride `T`
-    // optimizes spatial locality: it results in coalesced
-    // access to global memory (32 threads access consecutive
-    // words in memory). If each thread would have processed
-    // adjacent array elements (i.e., stride 1), then the penalty
-    // would be severe 5-10x slower!
-    typename OP::RedElTp acc = OP::identity();
-    for(uint32_t ind=gid; ind < N; ind+=T) {
-        // read input element
-        typename OP::InpElTp elm = d_in[ind];
-        // apply the mapped function and accumulate the per-thread
-        // result in `acc`.
-        typename OP::RedElTp red = OP::mapFun(elm);
-        acc = OP::apply(acc, red);
-    }
+  // The loop efficiently sequentializes the computation by making
+  // each thread iterate through the input with a stride `T` until
+  // all array elements have been processed. The stride `T`
+  // optimizes spatial locality: it results in coalesced
+  // access to global memory (32 threads access consecutive
+  // words in memory). If each thread would have processed
+  // adjacent array elements (i.e., stride 1), then the penalty
+  // would be severe 5-10x slower!
+  typename OP::RedElTp acc = OP::identity();
+  for (uint32_t ind = gid; ind < N; ind += T) {
+    // read input element
+    typename OP::InpElTp elm = d_in[ind];
+    // apply the mapped function and accumulate the per-thread
+    // result in `acc`.
+    typename OP::RedElTp red = OP::mapFun(elm);
+    acc = OP::apply(acc, red);
+  }
 
-    // the per-thread results are then placed in shared memory
-    // and reduced in parallel within the current CUDA-block.
-    shmem_red[threadIdx.x] = acc;
-    __syncthreads();
-    acc = scanIncBlock<OP>(shmem_red, threadIdx.x);
+  // the per-thread results are then placed in shared memory
+  // and reduced in parallel within the current CUDA-block.
+  shmem_red[threadIdx.x] = acc;
+  __syncthreads();
+  acc = scanIncBlock<OP>(shmem_red, threadIdx.x);
 
-    // the result of the current CUDA block is placed
-    // in global memory; the position is thus given by
-    // the index of the current block.
-    if (threadIdx.x == blockDim.x-1) {
-        d_tmp[blockIdx.x] = acc;
-    }
+  // the result of the current CUDA block is placed
+  // in global memory; the position is thus given by
+  // the index of the current block.
+  if (threadIdx.x == blockDim.x - 1) {
+    d_tmp[blockIdx.x] = acc;
+  }
 }
 
 /**
@@ -426,27 +468,25 @@ redCommuKernel( typename OP::RedElTp* d_tmp
  *    new formula for computing `loc_ind`, two consecutive threads
  *    will access consecutive memory words in the same SIMD instruction.
  */
-template<class T, uint32_t CHUNK>
-__device__ inline void
-copyFromGlb2ShrMem( const uint32_t glb_offs
-                  , const uint32_t N
-                  , const T& ne
-                  , T* d_inp
-                  , volatile T* shmem_inp
-) {
-    #pragma unroll
-    for(uint32_t i=0; i<CHUNK; i++) {
-	#if 0 then
+template <class T, uint32_t CHUNK>
+__device__ inline void copyFromGlb2ShrMem(const uint32_t glb_offs,
+                                          const uint32_t N, const T &ne,
+                                          T *d_inp, volatile T *shmem_inp) {
+#pragma unroll
+  for (uint32_t i = 0; i < CHUNK; i++) {
+#if 0 then
 	    uint32_t loc_ind = i * CHUNK + threadIdx.x;
-	#else
-            uint32_t loc_ind = threadIdx.x*CHUNK + i;
-	#endif
-        uint32_t glb_ind = glb_offs + loc_ind;
-        T elm = ne;
-        if(glb_ind < N) { elm = d_inp[glb_ind]; }
-        shmem_inp[loc_ind] = elm;
+#else
+    uint32_t loc_ind = threadIdx.x * CHUNK + i;
+#endif
+    uint32_t glb_ind = glb_offs + loc_ind;
+    T elm = ne;
+    if (glb_ind < N) {
+      elm = d_inp[glb_ind];
     }
-    __syncthreads(); // leave this here at the end!
+    shmem_inp[loc_ind] = elm;
+  }
+  __syncthreads(); // leave this here at the end!
 }
 
 /**
@@ -461,29 +501,25 @@ copyFromGlb2ShrMem( const uint32_t glb_offs
  * `shmem_red` is the shared-memory of size
  *    `blockDim.x*CHUNK*sizeof(T)`
  */
-template<class T, uint32_t CHUNK>
-__device__ inline void
-copyFromShr2GlbMem( const uint32_t glb_offs
-                  , const uint32_t N
-                  , T* d_out
-                  , volatile T* shmem_red
-) {
-    #pragma unroll
-    for (uint32_t i = 0; i < CHUNK; i++) {
-	#if 0 then 
+template <class T, uint32_t CHUNK>
+__device__ inline void copyFromShr2GlbMem(const uint32_t glb_offs,
+                                          const uint32_t N, T *d_out,
+                                          volatile T *shmem_red) {
+#pragma unroll
+  for (uint32_t i = 0; i < CHUNK; i++) {
+#if 0 then 
 	    uint32_t loc_ind = i * CHUNK + threadIdx.x;
-	#else
-	    uint32_t loc_ind = threadIdx.x * CHUNK + i;
-	#endif
-        uint32_t glb_ind = glb_offs + loc_ind;
-        if (glb_ind < N) {
-            T elm = const_cast<const T&>(shmem_red[loc_ind]);
-            d_out[glb_ind] = elm;
-        }
+#else
+    uint32_t loc_ind = threadIdx.x * CHUNK + i;
+#endif
+    uint32_t glb_ind = glb_offs + loc_ind;
+    if (glb_ind < N) {
+      T elm = const_cast<const T &>(shmem_red[loc_ind]);
+      d_out[glb_ind] = elm;
     }
-    __syncthreads(); // leave this here at the end!
+  }
+  __syncthreads(); // leave this here at the end!
 }
-
 
 /**
  * This kernel assumes that the generic-associative binary operator
@@ -499,68 +535,65 @@ copyFromShr2GlbMem( const uint32_t glb_offs
  * `d_tmp` is the result array, having number-of-blocks elements,
  * `d_in` is the input array of length `N`.
  */
-template<class OP, int CHUNK>
-__global__ void
-redAssocKernel( typename OP::RedElTp* d_tmp
-              , typename OP::InpElTp* d_in
-              , uint32_t N
-              , uint32_t num_seq_chunks
-) {
-    extern __shared__ char sh_mem[];
-    // shared memory for the input-element and reduce-element type;
-    // the two shared memories overlap, since they are not used in
-    // the same time.
-    volatile typename OP::InpElTp* shmem_inp = (typename OP::InpElTp*)sh_mem;
-    volatile typename OP::RedElTp* shmem_red = (typename OP::RedElTp*)sh_mem;
+template <class OP, int CHUNK>
+__global__ void redAssocKernel(typename OP::RedElTp *d_tmp,
+                               typename OP::InpElTp *d_in, uint32_t N,
+                               uint32_t num_seq_chunks) {
+  extern __shared__ char sh_mem[];
+  // shared memory for the input-element and reduce-element type;
+  // the two shared memories overlap, since they are not used in
+  // the same time.
+  volatile typename OP::InpElTp *shmem_inp = (typename OP::InpElTp *)sh_mem;
+  volatile typename OP::RedElTp *shmem_red = (typename OP::RedElTp *)sh_mem;
 
-    // initialization for the per-block result
-    typename OP::RedElTp res = OP::identity();
+  // initialization for the per-block result
+  typename OP::RedElTp res = OP::identity();
 
-    uint32_t num_elems_per_block = num_seq_chunks * CHUNK * blockDim.x;
-    uint32_t inp_block_offs = num_elems_per_block * blockIdx.x;
-    uint32_t num_elems_per_iter  = CHUNK * blockDim.x;
+  uint32_t num_elems_per_block = num_seq_chunks * CHUNK * blockDim.x;
+  uint32_t inp_block_offs = num_elems_per_block * blockIdx.x;
+  uint32_t num_elems_per_iter = CHUNK * blockDim.x;
 
-    // virtualization loop of count `num_seq_chunks`. Each iteration processes
-    //   `blockDim.x * CHUNK` elements, i.e., `CHUNK` elements per thread.
-    // `num_seq_chunks` is chosen such that it covers all N input elements
-    for(int seq=0; seq<num_elems_per_block; seq+=num_elems_per_iter) {
+  // virtualization loop of count `num_seq_chunks`. Each iteration processes
+  //   `blockDim.x * CHUNK` elements, i.e., `CHUNK` elements per thread.
+  // `num_seq_chunks` is chosen such that it covers all N input elements
+  for (int seq = 0; seq < num_elems_per_block; seq += num_elems_per_iter) {
 
-        // 1. copy `CHUNK` input elements per thread from global to shared memory
-        //    in a coalesced fashion (for global memory)
-        copyFromGlb2ShrMem<typename OP::InpElTp,CHUNK>
-                ( inp_block_offs + seq, N, OP::identInp(), d_in, shmem_inp );
+    // 1. copy `CHUNK` input elements per thread from global to shared memory
+    //    in a coalesced fashion (for global memory)
+    copyFromGlb2ShrMem<typename OP::InpElTp, CHUNK>(
+        inp_block_offs + seq, N, OP::identInp(), d_in, shmem_inp);
 
-        // 2. each thread sequentially reads its `CHUNK` elements from shared
-        //     memory, applies the map function and reduces them.
-        typename OP::RedElTp acc = OP::identity();
-        uint32_t shmem_offset = threadIdx.x * CHUNK;
-        #pragma unroll
-        for (uint32_t i = 0; i < CHUNK; i++) {
-            typename OP::InpElTp elm = shmem_inp[shmem_offset + i];
-            typename OP::RedElTp red = OP::mapFun(elm);
-            acc = OP::apply(acc, red);
-        }
-        __syncthreads();
-
-        // 3. each thread publishes the previous result in shared memory
-        shmem_red[threadIdx.x] = acc;
-        __syncthreads();
-
-        // 4. perform an intra-block reduction with the per-thread result
-        //    from step 2; the last thread updates the per-block result `res`
-        acc = scanIncBlock<OP>(shmem_red, threadIdx.x);
-        if (threadIdx.x == blockDim.x-1) {
-            res = OP::apply(res, acc);
-        }
-        __syncthreads();
-        // rinse and repeat until all elements have been processed.
+    // 2. each thread sequentially reads its `CHUNK` elements from shared
+    //     memory, applies the map function and reduces them.
+    typename OP::RedElTp acc = OP::identity();
+    uint32_t shmem_offset = threadIdx.x * CHUNK;
+#pragma unroll
+    for (uint32_t i = 0; i < CHUNK; i++) {
+      typename OP::InpElTp elm = shmem_inp[shmem_offset + i];
+      typename OP::RedElTp red = OP::mapFun(elm);
+      acc = OP::apply(acc, red);
     }
+    __syncthreads();
 
-    // 4. last thread publishes the per-block reduction result
-    //    in global memory
-    if (threadIdx.x == blockDim.x-1) {
-        d_tmp[blockIdx.x] = res;
+    // 3. each thread publishes the previous result in shared memory
+    shmem_red[threadIdx.x] = acc;
+    __syncthreads();
+
+    // 4. perform an intra-block reduction with the per-thread result
+    //    from step 2; the last thread updates the per-block result `res`
+    acc = scanIncBlock<OP>(shmem_red, threadIdx.x);
+    if (threadIdx.x == blockDim.x - 1) {
+      res = OP::apply(res, acc);
     }
+    __syncthreads();
+    // rinse and repeat until all elements have been processed.
+  }
+
+  // 4. last thread publishes the per-block reduction result
+  //    in global memory
+  if (threadIdx.x == blockDim.x - 1) {
+    d_tmp[blockIdx.x] = res;
+  }
 }
 
 /********************/
@@ -575,21 +608,20 @@ redAssocKernel( typename OP::RedElTp* d_tmp
  *  This kernel operates in-place, i.e., the input is
  *  overwritten with the result.
  */
-template<class OP>
-__global__ void
-scan1Block( typename OP::RedElTp* d_inout, uint32_t N ) {
-    extern __shared__ char sh_mem[];
-    volatile typename OP::RedElTp* shmem_red = (typename OP::RedElTp*)sh_mem;
-    typename OP::RedElTp elm = OP::identity();
-    if(threadIdx.x < N) {
-        elm = d_inout[threadIdx.x];
-    }
-    shmem_red[threadIdx.x] = elm;
-    __syncthreads();
-    elm = scanIncBlock<OP>(shmem_red, threadIdx.x);
-    if (threadIdx.x < N) {
-        d_inout[threadIdx.x] = elm;
-    }
+template <class OP>
+__global__ void scan1Block(typename OP::RedElTp *d_inout, uint32_t N) {
+  extern __shared__ char sh_mem[];
+  volatile typename OP::RedElTp *shmem_red = (typename OP::RedElTp *)sh_mem;
+  typename OP::RedElTp elm = OP::identity();
+  if (threadIdx.x < N) {
+    elm = d_inout[threadIdx.x];
+  }
+  shmem_red[threadIdx.x] = elm;
+  __syncthreads();
+  elm = scanIncBlock<OP>(shmem_red, threadIdx.x);
+  if (threadIdx.x < N) {
+    d_inout[threadIdx.x] = elm;
+  }
 }
 
 /**
@@ -617,102 +649,102 @@ scan1Block( typename OP::RedElTp* d_inout, uint32_t N ) {
  *   accumulates to each of them the prefix of the previous block `i-1`,
  *   which is stored in `d_tmp[i-1]`.
  */
-template<class OP, int CHUNK>
-__global__ void
-scan3rdKernel ( typename OP::RedElTp* d_out
-              , typename OP::InpElTp* d_in
-              , typename OP::RedElTp* d_tmp
-              , uint32_t N
-              , uint32_t num_seq_chunks
-) {
-    extern __shared__ char sh_mem[];
-    // shared memory for the input elements (types)
-    volatile typename OP::InpElTp* shmem_inp = (typename OP::InpElTp*)sh_mem;
+template <class OP, int CHUNK>
+__global__ void scan3rdKernel(typename OP::RedElTp *d_out,
+                              typename OP::InpElTp *d_in,
+                              typename OP::RedElTp *d_tmp, uint32_t N,
+                              uint32_t num_seq_chunks) {
+  extern __shared__ char sh_mem[];
+  // shared memory for the input elements (types)
+  volatile typename OP::InpElTp *shmem_inp = (typename OP::InpElTp *)sh_mem;
 
-    // shared memory for the reduce-element type; it overlaps with the
-    //   `shmem_inp` since they are not going to be used in the same time.
-    volatile typename OP::RedElTp* shmem_red = (typename OP::RedElTp*)sh_mem;
+  // shared memory for the reduce-element type; it overlaps with the
+  //   `shmem_inp` since they are not going to be used in the same time.
+  volatile typename OP::RedElTp *shmem_red = (typename OP::RedElTp *)sh_mem;
 
-    // number of elements to be processed by each block
-    uint32_t num_elems_per_block = num_seq_chunks * CHUNK * blockDim.x;
+  // number of elements to be processed by each block
+  uint32_t num_elems_per_block = num_seq_chunks * CHUNK * blockDim.x;
 
-    // the current block start processing input elements from this offset:
-    uint32_t inp_block_offs = num_elems_per_block * blockIdx.x;
+  // the current block start processing input elements from this offset:
+  uint32_t inp_block_offs = num_elems_per_block * blockIdx.x;
 
-    // number of elments to be processed by an iteration of the
-    // "virtualization" loop
-    uint32_t num_elems_per_iter  = CHUNK * blockDim.x;
+  // number of elments to be processed by an iteration of the
+  // "virtualization" loop
+  uint32_t num_elems_per_iter = CHUNK * blockDim.x;
 
-    // accumulator updated at each iteration of the "virtualization"
-    //   loop so we remember the prefix for the current elements.
-    typename OP::RedElTp accum = (blockIdx.x == 0) ? OP::identity() : d_tmp[blockIdx.x-1];
+  // accumulator updated at each iteration of the "virtualization"
+  //   loop so we remember the prefix for the current elements.
+  typename OP::RedElTp accum =
+      (blockIdx.x == 0) ? OP::identity() : d_tmp[blockIdx.x - 1];
 
-    // register memory for storing the scanned elements.
-    typename OP::RedElTp chunk[CHUNK];
+  // register memory for storing the scanned elements.
+  typename OP::RedElTp chunk[CHUNK];
 
-    // virtualization loop of count `num_seq_chunks`. Each iteration processes
-    //   `blockDim.x * CHUNK` elements, i.e., `CHUNK` elements per thread.
-    for(int seq=0; seq<num_elems_per_block; seq+=num_elems_per_iter) {
-        // 1. copy `CHUNK` input elements per thread from global to shared memory
-        //    in coalesced fashion (for global memory)
-        copyFromGlb2ShrMem<typename OP::InpElTp, CHUNK>
-                  (inp_block_offs+seq, N, OP::identInp(), d_in, shmem_inp);
+  // virtualization loop of count `num_seq_chunks`. Each iteration processes
+  //   `blockDim.x * CHUNK` elements, i.e., `CHUNK` elements per thread.
+  for (int seq = 0; seq < num_elems_per_block; seq += num_elems_per_iter) {
+    // 1. copy `CHUNK` input elements per thread from global to shared memory
+    //    in coalesced fashion (for global memory)
+    copyFromGlb2ShrMem<typename OP::InpElTp, CHUNK>(
+        inp_block_offs + seq, N, OP::identInp(), d_in, shmem_inp);
 
-        // 2. each thread sequentially scans its `CHUNK` elements
-        //    and stores the result in the `chunk` array. The reduced
-        //    result is stored in `tmp`.
-        typename OP::RedElTp tmp = OP::identity();
-        uint32_t shmem_offset = threadIdx.x * CHUNK;
-        #pragma unroll
-        for (uint32_t i = 0; i < CHUNK; i++) {
-            typename OP::InpElTp elm = shmem_inp[shmem_offset + i];
-            typename OP::RedElTp red = OP::mapFun(elm);
-            tmp = OP::apply(tmp, red);
-            chunk[i] = tmp;
-        }
-        __syncthreads();
-
-        // 3. Each thread publishes in shared memory the reduced result of its
-        //    `CHUNK` elements
-        shmem_red[threadIdx.x] = tmp;
-        __syncthreads();
-
-        // 4. perform an intra-CUDA-block scan
-        tmp = scanIncBlock<OP>(shmem_red, threadIdx.x);
-        __syncthreads();
-
-        // 5. write the scan result back to shared memory
-        shmem_red[threadIdx.x] = tmp;
-        __syncthreads();
-
-        // 6. the previous element is read from shared memory in `tmp`:
-        //       it is the prefix of the previous threads in the current block.
-        tmp   = OP::identity();
-        if (threadIdx.x > 0)
-            tmp = OP::remVolatile(shmem_red[threadIdx.x-1]);
-        // 7. the prefix of the previous blocks (and iterations) is hold
-        //    in `accum` and is accumulated to `tmp`, which now holds the
-        //    global prefix for the `CHUNK` elements processed by the current thread.
-        tmp   = OP::apply(accum, tmp);
-
-        // 8. `accum` is also updated with the reduced result of the current
-        //    iteration, i.e., of the last thread in the block: `shmem_red[blockDim.x-1]`
-        accum = OP::apply(accum, shmem_red[blockDim.x-1]);
-        __syncthreads();
-
-        // 9. the `tmp` prefix is accumulated to all the `CHUNK` elements
-        //      locally processed by the current thread (i.e., the ones
-        //      in `chunk` array hold in registers).
-        #pragma unroll
-        for (uint32_t i = 0; i < CHUNK; i++) {
-            shmem_red[threadIdx.x*CHUNK + i] = OP::apply(tmp, chunk[i]);
-        }
-        __syncthreads();
-
-        // 5. write back from shared to global memory in coalesced fashion.
-        copyFromShr2GlbMem<typename OP::RedElTp, CHUNK>
-                  (inp_block_offs+seq, N, d_out, shmem_red);
+    // 2. each thread sequentially scans its `CHUNK` elements
+    //    and stores the result in the `chunk` array. The reduced
+    //    result is stored in `tmp`.
+    typename OP::RedElTp tmp = OP::identity();
+    uint32_t shmem_offset = threadIdx.x * CHUNK;
+#pragma unroll
+    for (uint32_t i = 0; i < CHUNK; i++) {
+      typename OP::InpElTp elm = shmem_inp[shmem_offset + i];
+      typename OP::RedElTp red = OP::mapFun(elm);
+      tmp = OP::apply(tmp, red);
+      chunk[i] = tmp;
     }
+    __syncthreads();
+
+    // 3. Each thread publishes in shared memory the reduced result of its
+    //    `CHUNK` elements
+    shmem_red[threadIdx.x] = tmp;
+    __syncthreads();
+
+    // 4. perform an intra-CUDA-block scan
+    tmp = scanIncBlock<OP>(shmem_red, threadIdx.x);
+    __syncthreads();
+
+    // 5. write the scan result back to shared memory
+    shmem_red[threadIdx.x] = tmp;
+    __syncthreads();
+
+    // 6. the previous element is read from shared memory in `tmp`:
+    //       it is the prefix of the previous threads in the current block.
+    tmp = OP::identity();
+    if (threadIdx.x > 0)
+      tmp = OP::remVolatile(shmem_red[threadIdx.x - 1]);
+    // 7. the prefix of the previous blocks (and iterations) is hold
+    //    in `accum` and is accumulated to `tmp`, which now holds the
+    //    global prefix for the `CHUNK` elements processed by the current
+    //    thread.
+    tmp = OP::apply(accum, tmp);
+
+    // 8. `accum` is also updated with the reduced result of the current
+    //    iteration, i.e., of the last thread in the block:
+    //    `shmem_red[blockDim.x-1]`
+    accum = OP::apply(accum, shmem_red[blockDim.x - 1]);
+    __syncthreads();
+
+// 9. the `tmp` prefix is accumulated to all the `CHUNK` elements
+//      locally processed by the current thread (i.e., the ones
+//      in `chunk` array hold in registers).
+#pragma unroll
+    for (uint32_t i = 0; i < CHUNK; i++) {
+      shmem_red[threadIdx.x * CHUNK + i] = OP::apply(tmp, chunk[i]);
+    }
+    __syncthreads();
+
+    // 5. write back from shared to global memory in coalesced fashion.
+    copyFromShr2GlbMem<typename OP::RedElTp, CHUNK>(inp_block_offs + seq, N,
+                                                    d_out, shmem_red);
+  }
 }
 
 /*************************************************/
@@ -733,25 +765,28 @@ scan3rdKernel ( typename OP::RedElTp* d_out
  * Each thread returns the corresponding scanned element of type
  *   `ValFlg<typename OP::RedElTp>`
  */
-template<class OP, class F>
+template <class OP, class F>
 __device__ inline ValFlg<typename OP::RedElTp>
-sgmScanIncWarp(volatile typename OP::RedElTp* ptr, volatile F* flg, const unsigned int idx) {
-    typedef ValFlg<typename OP::RedElTp> FVTup;
-    const unsigned int lane = idx & (WARP-1);
+sgmScanIncWarp(volatile typename OP::RedElTp *ptr, volatile F *flg,
+               const unsigned int idx) {
+  typedef ValFlg<typename OP::RedElTp> FVTup;
+  const unsigned int lane = idx & (WARP - 1);
 
-    // no synchronization needed inside a WARP, i.e., SIMD execution
-    #pragma unroll
-    for(uint32_t i=0; i<lgWARP; i++) {
-        const uint32_t p = (1<<i);
-        if( lane >= p ) {
-            if(flg[idx] == 0) { ptr[idx] = OP::apply(ptr[idx-p], ptr[idx]); }
-            flg[idx] = flg[idx-p] | flg[idx];
-        } // __syncwarp();
-    }
+// no synchronization needed inside a WARP, i.e., SIMD execution
+#pragma unroll
+  for (uint32_t i = 0; i < lgWARP; i++) {
+    const uint32_t p = (1 << i);
+    if (lane >= p) {
+      if (flg[idx] == 0) {
+        ptr[idx] = OP::apply(ptr[idx - p], ptr[idx]);
+      }
+      flg[idx] = flg[idx - p] | flg[idx];
+    } // __syncwarp();
+  }
 
-    F f = flg[idx];
-    typename OP::RedElTp v = OP::remVolatile(ptr[idx]);
-    return FVTup( f, v );
+  F f = flg[idx];
+  typename OP::RedElTp v = OP::remVolatile(ptr[idx]);
+  return FVTup(f, v);
 }
 
 /**
@@ -763,37 +798,42 @@ sgmScanIncWarp(volatile typename OP::RedElTp* ptr, volatile F* flg, const unsign
  * Each thread returns the corresponding scanned element of type
  *   `typename OP::RedElTp`; note that this is NOT published to shared memory!
  */
-template<class OP, class F>
+template <class OP, class F>
 __device__ inline ValFlg<typename OP::RedElTp>
-sgmScanIncBlock(volatile typename OP::RedElTp* ptr, volatile F* flg, const unsigned int idx) {
-    typedef ValFlg<typename OP::RedElTp> FVTup;
-    const unsigned int lane   = idx & (WARP-1);
-    const unsigned int warpid = idx >> lgWARP;
+sgmScanIncBlock(volatile typename OP::RedElTp *ptr, volatile F *flg,
+                const unsigned int idx) {
+  typedef ValFlg<typename OP::RedElTp> FVTup;
+  const unsigned int lane = idx & (WARP - 1);
+  const unsigned int warpid = idx >> lgWARP;
 
-    // 1. perform scan at warp level
-    FVTup res = sgmScanIncWarp<OP,F>(ptr, flg, idx);
-    __syncthreads();
+  // 1. perform scan at warp level
+  FVTup res = sgmScanIncWarp<OP, F>(ptr, flg, idx);
+  __syncthreads();
 
-    // 2. if last thread in a warp, record it at the beginning of sh_data
-    if ( lane == (WARP-1) ) { flg[warpid] = res.f; ptr[warpid] = res.v; }
-    __syncthreads();
+  // 2. if last thread in a warp, record it at the beginning of sh_data
+  if (lane == (WARP - 1)) {
+    flg[warpid] = res.f;
+    ptr[warpid] = res.v;
+  }
+  __syncthreads();
 
-    // 3. first warp scans the per warp results (again)
-    if( warpid == 0 ) sgmScanIncWarp<OP,F>(ptr, flg, idx);
-    __syncthreads();
+  // 3. first warp scans the per warp results (again)
+  if (warpid == 0)
+    sgmScanIncWarp<OP, F>(ptr, flg, idx);
+  __syncthreads();
 
-    // 4. accumulate results from previous step;
-    if (warpid > 0) {
-        FVTup prev;
-        prev.f = (char) flg[warpid-1];
-        prev.v = OP::remVolatile(ptr[warpid-1]);
-        res = LiftOP<OP>::apply( prev, res );
-    }
-    //__syncthreads();
-    //flg[idx] = res.f;
-    //ptr[idx] = res.v;
-    //__syncthreads();
-    return res;
+  // 4. accumulate results from previous step;
+  if (warpid > 0) {
+    FVTup prev;
+    prev.f = (char)flg[warpid - 1];
+    prev.v = OP::remVolatile(ptr[warpid - 1]);
+    res = LiftOP<OP>::apply(prev, res);
+  }
+  //__syncthreads();
+  // flg[idx] = res.f;
+  // ptr[idx] = res.v;
+  //__syncthreads();
+  return res;
 }
 
 ////////////////////////////////////////////
@@ -807,34 +847,33 @@ sgmScanIncBlock(volatile typename OP::RedElTp* ptr, volatile F* flg, const unsig
  *  This kernel operates in-place, i.e., the input is
  *  overwritten with the result.
  */
-template<class OP>
-__global__ void
-sgmScan1Block( typename OP::RedElTp* d_vals
-             , char*                 d_flag
-             , uint32_t N
-) {
-    extern __shared__ char sh_mem[];
-    volatile typename OP::RedElTp* shmem_red = (volatile typename OP::RedElTp*)sh_mem;
-    volatile char*                 shmem_flg = (volatile char*)(shmem_red + blockDim.x);
-    typename OP::RedElTp elm = OP::identity();
-    char flg = 0;
-    if(threadIdx.x < N) {
-        elm = d_vals[threadIdx.x];
-        flg = d_flag[threadIdx.x];
-    }
-    shmem_red[threadIdx.x] = elm;
-    shmem_flg[threadIdx.x] = flg;
+template <class OP>
+__global__ void sgmScan1Block(typename OP::RedElTp *d_vals, char *d_flag,
+                              uint32_t N) {
+  extern __shared__ char sh_mem[];
+  volatile typename OP::RedElTp *shmem_red =
+      (volatile typename OP::RedElTp *)sh_mem;
+  volatile char *shmem_flg = (volatile char *)(shmem_red + blockDim.x);
+  typename OP::RedElTp elm = OP::identity();
+  char flg = 0;
+  if (threadIdx.x < N) {
+    elm = d_vals[threadIdx.x];
+    flg = d_flag[threadIdx.x];
+  }
+  shmem_red[threadIdx.x] = elm;
+  shmem_flg[threadIdx.x] = flg;
 
-    __syncthreads();
+  __syncthreads();
 
-    ValFlg<typename OP::RedElTp> fv = //(blockDim.x == 32) ?
-        //sgmScanIncWarp <OP,char>(shmem_red, shmem_flg, threadIdx.x);
-        sgmScanIncBlock<OP,char>(shmem_red, shmem_flg, threadIdx.x) ;
+  ValFlg<typename OP::RedElTp>
+      fv = //(blockDim.x == 32) ?
+           // sgmScanIncWarp <OP,char>(shmem_red, shmem_flg, threadIdx.x);
+      sgmScanIncBlock<OP, char>(shmem_red, shmem_flg, threadIdx.x);
 
-    if (threadIdx.x < N) {
-        d_vals[threadIdx.x] = fv.v;
-        d_flag[threadIdx.x] = fv.f;
-    }
+  if (threadIdx.x < N) {
+    d_vals[threadIdx.x] = fv.v;
+    d_flag[threadIdx.x] = fv.f;
+  }
 }
 
 /**
@@ -847,71 +886,68 @@ sgmScan1Block( typename OP::RedElTp* d_vals
  * for using the extended operator for segmented reduction---that
  * works on flag-value pairs---and is implemented by `LiftOP<OP>`
  */
-template<class OP, int CHUNK>
-__global__ void
-redSgmScanKernel( char*                 d_tmp_flag
-                , typename OP::RedElTp* d_tmp_vals
-                , char*                 d_flag
-                , typename OP::InpElTp* d_in
-                , uint32_t N
-                , uint32_t num_seq_chunks
-) {
-    typedef ValFlg<typename OP::RedElTp> FVTup;
-    extern __shared__ char sh_mem[];
-    volatile typename OP::InpElTp* shmem_inp = (typename OP::InpElTp*)sh_mem;
-    volatile typename OP::RedElTp* shmem_red = (typename OP::RedElTp*)sh_mem;
+template <class OP, int CHUNK>
+__global__ void redSgmScanKernel(char *d_tmp_flag,
+                                 typename OP::RedElTp *d_tmp_vals, char *d_flag,
+                                 typename OP::InpElTp *d_in, uint32_t N,
+                                 uint32_t num_seq_chunks) {
+  typedef ValFlg<typename OP::RedElTp> FVTup;
+  extern __shared__ char sh_mem[];
+  volatile typename OP::InpElTp *shmem_inp = (typename OP::InpElTp *)sh_mem;
+  volatile typename OP::RedElTp *shmem_red = (typename OP::RedElTp *)sh_mem;
 
-    FVTup res = LiftOP<OP>::identity();
+  FVTup res = LiftOP<OP>::identity();
 
-    uint32_t num_elems_per_block = num_seq_chunks * CHUNK * blockDim.x;
-    uint32_t inp_block_offs = num_elems_per_block * blockIdx.x;
-    uint32_t num_elems_per_iter = CHUNK * blockDim.x;
+  uint32_t num_elems_per_block = num_seq_chunks * CHUNK * blockDim.x;
+  uint32_t inp_block_offs = num_elems_per_block * blockIdx.x;
+  uint32_t num_elems_per_iter = CHUNK * blockDim.x;
 
-    // virtualization loop of count `num_seq_chunks`. Each iteration processes
-    //   `blockDim.x * CHUNK` elements, i.e., `CHUNK` elements per thread.
-    for(int seq=0; seq<num_elems_per_block; seq+=num_elems_per_iter) {
-        volatile char* shmem_flg = (volatile char*)(shmem_inp + CHUNK*blockDim.x);
+  // virtualization loop of count `num_seq_chunks`. Each iteration processes
+  //   `blockDim.x * CHUNK` elements, i.e., `CHUNK` elements per thread.
+  for (int seq = 0; seq < num_elems_per_block; seq += num_elems_per_iter) {
+    volatile char *shmem_flg =
+        (volatile char *)(shmem_inp + CHUNK * blockDim.x);
 
-        // 1. copy `CHUNK` input elements per thread
-        //    from global to shared memory (both values and flags)
-        copyFromGlb2ShrMem<typename OP::InpElTp, CHUNK>
-                  (inp_block_offs+seq, N, OP::identInp(), d_in, shmem_inp);
-        copyFromGlb2ShrMem<char, CHUNK>
-                  (inp_block_offs+seq, N, 0, d_flag, shmem_flg);
+    // 1. copy `CHUNK` input elements per thread
+    //    from global to shared memory (both values and flags)
+    copyFromGlb2ShrMem<typename OP::InpElTp, CHUNK>(
+        inp_block_offs + seq, N, OP::identInp(), d_in, shmem_inp);
+    copyFromGlb2ShrMem<char, CHUNK>(inp_block_offs + seq, N, 0, d_flag,
+                                    shmem_flg);
 
-        // 2. each thread sequentially reduces its `CHUNK` elements
-        FVTup acc = LiftOP<OP>::identity();
-        uint32_t shmem_offset = threadIdx.x * CHUNK;
-        #pragma unroll
-        for (uint32_t i = 0; i < CHUNK; i++) {
-            typename OP::InpElTp elm = shmem_inp[shmem_offset + i];
-            typename OP::RedElTp red = OP::mapFun(elm);
-            char flg = shmem_flg[shmem_offset + i];
-            acc = LiftOP<OP>::apply( acc, FVTup(flg, red) );
-        }
-        __syncthreads();
-
-        shmem_flg = (volatile char*)(shmem_red + blockDim.x);
-
-        // 3. perform an intra-block reduction with the per-thread result
-        //    from step 2. and the last thread updates the per-block result
-        shmem_red[threadIdx.x] = acc.v;
-        shmem_flg[threadIdx.x] = acc.f;
-        __syncthreads();
-
-        acc = sgmScanIncBlock<OP,char>(shmem_red, shmem_flg, threadIdx.x);
-
-        if (threadIdx.x == blockDim.x-1) {
-            res = LiftOP<OP>::apply(res, acc);
-        }
-        __syncthreads();
+    // 2. each thread sequentially reduces its `CHUNK` elements
+    FVTup acc = LiftOP<OP>::identity();
+    uint32_t shmem_offset = threadIdx.x * CHUNK;
+#pragma unroll
+    for (uint32_t i = 0; i < CHUNK; i++) {
+      typename OP::InpElTp elm = shmem_inp[shmem_offset + i];
+      typename OP::RedElTp red = OP::mapFun(elm);
+      char flg = shmem_flg[shmem_offset + i];
+      acc = LiftOP<OP>::apply(acc, FVTup(flg, red));
     }
+    __syncthreads();
 
-    // 4. publish result in global memory
-    if (threadIdx.x == blockDim.x-1) {
-        d_tmp_flag[blockIdx.x] = res.f;
-        d_tmp_vals[blockIdx.x] = res.v;
+    shmem_flg = (volatile char *)(shmem_red + blockDim.x);
+
+    // 3. perform an intra-block reduction with the per-thread result
+    //    from step 2. and the last thread updates the per-block result
+    shmem_red[threadIdx.x] = acc.v;
+    shmem_flg[threadIdx.x] = acc.f;
+    __syncthreads();
+
+    acc = sgmScanIncBlock<OP, char>(shmem_red, shmem_flg, threadIdx.x);
+
+    if (threadIdx.x == blockDim.x - 1) {
+      res = LiftOP<OP>::apply(res, acc);
     }
+    __syncthreads();
+  }
+
+  // 4. publish result in global memory
+  if (threadIdx.x == blockDim.x - 1) {
+    d_tmp_flag[blockIdx.x] = res.f;
+    d_tmp_vals[blockIdx.x] = res.v;
+  }
 }
 
 /**
@@ -941,108 +977,104 @@ redSgmScanKernel( char*                 d_tmp_flag
  *
  * The implementation is very similar to `scan3rdKernel` kernel.
  */
-template<class OP, int CHUNK>
+template <class OP, int CHUNK>
 __global__ void
-sgmScan3rdKernel ( typename OP::RedElTp* d_out
-                 , typename OP::InpElTp* d_inp
-                 , char*                 d_flg
-                 , typename OP::RedElTp* d_tmp_vals
-                 , char*                 d_tmp_flag
-                 , uint32_t N
-                 , uint32_t num_seq_chunks
-) {
-    // datatype for a flag-value pair
-    typedef ValFlg<typename OP::RedElTp> FVTup;
+sgmScan3rdKernel(typename OP::RedElTp *d_out, typename OP::InpElTp *d_inp,
+                 char *d_flg, typename OP::RedElTp *d_tmp_vals,
+                 char *d_tmp_flag, uint32_t N, uint32_t num_seq_chunks) {
+  // datatype for a flag-value pair
+  typedef ValFlg<typename OP::RedElTp> FVTup;
 
-    // externally declared shared memory
-    extern __shared__ char sh_mem[];
+  // externally declared shared memory
+  extern __shared__ char sh_mem[];
 
-    // shared memory for the input and mapped elements; they overlap,
-    // since they are not to be used in the same time.
-    volatile typename OP::InpElTp* shmem_inp = (typename OP::InpElTp*)sh_mem;
-    volatile typename OP::RedElTp* shmem_red = (typename OP::RedElTp*)sh_mem;
+  // shared memory for the input and mapped elements; they overlap,
+  // since they are not to be used in the same time.
+  volatile typename OP::InpElTp *shmem_inp = (typename OP::InpElTp *)sh_mem;
+  volatile typename OP::RedElTp *shmem_red = (typename OP::RedElTp *)sh_mem;
 
-    uint32_t num_elems_per_block = num_seq_chunks * CHUNK * blockDim.x;
-    uint32_t inp_block_offs = num_elems_per_block * blockIdx.x;
-    uint32_t num_elems_per_iter  = CHUNK * blockDim.x;
+  uint32_t num_elems_per_block = num_seq_chunks * CHUNK * blockDim.x;
+  uint32_t inp_block_offs = num_elems_per_block * blockIdx.x;
+  uint32_t num_elems_per_iter = CHUNK * blockDim.x;
 
-    // everybody reads the flag-value prefix corresponding to
-    //   the previous CUDA block if any, which is stored in `acum`.
-    FVTup accum;
-    if (blockIdx.x > 0) {
-        accum.f = d_tmp_flag[blockIdx.x-1];
-        accum.v = d_tmp_vals[blockIdx.x-1];
-    } else {
-        accum = LiftOP<OP>::identity();
+  // everybody reads the flag-value prefix corresponding to
+  //   the previous CUDA block if any, which is stored in `acum`.
+  FVTup accum;
+  if (blockIdx.x > 0) {
+    accum.f = d_tmp_flag[blockIdx.x - 1];
+    accum.v = d_tmp_vals[blockIdx.x - 1];
+  } else {
+    accum = LiftOP<OP>::identity();
+  }
+
+  // register-allocated array for holding the `CHUNK` elements that
+  //   are to be processed sequentially (individually) by each thread.
+  FVTup chunk[CHUNK];
+
+  // virtualization loop of count `num_seq_chunks`. Each iteration processes
+  //   `blockDim.x * CHUNK` elements, i.e., `CHUNK` elements per thread.
+  for (int seq = 0; seq < num_elems_per_block; seq += num_elems_per_iter) {
+    volatile char *shmem_flg =
+        (volatile char *)(shmem_inp + CHUNK * blockDim.x);
+
+    // 1. copy `CHUNK` input elements per thread from
+    //    global to shared memory in coalesced fashion
+    copyFromGlb2ShrMem<typename OP::InpElTp, CHUNK>(
+        inp_block_offs + seq, N, OP::identInp(), d_inp, shmem_inp);
+    copyFromGlb2ShrMem<char, CHUNK>(inp_block_offs + seq, N, 0, d_flg,
+                                    shmem_flg);
+
+    // 2. each thread sequentially reduces its `CHUNK` elements,
+    //    the result is stored in `chunk` array (mapped to registers),
+    //    and `tmp` denotes the reduced result.
+    FVTup tmp = LiftOP<OP>::identity();
+    uint32_t shmem_offset = threadIdx.x * CHUNK;
+#pragma unroll
+    for (uint32_t i = 0; i < CHUNK; i++) {
+      typename OP::InpElTp elm = shmem_inp[shmem_offset + i];
+      char flg = shmem_flg[shmem_offset + i];
+      FVTup red(flg, OP::mapFun(elm));
+      tmp = LiftOP<OP>::apply(tmp, red);
+      chunk[i] = tmp;
     }
+    __syncthreads();
 
-    // register-allocated array for holding the `CHUNK` elements that
-    //   are to be processed sequentially (individually) by each thread.
-    FVTup chunk[CHUNK];
+    // 3. publish in shared memory and perform intra-group scan
+    shmem_flg = (volatile char *)(shmem_red + blockDim.x);
+    shmem_red[threadIdx.x] = tmp.v;
+    shmem_flg[threadIdx.x] = tmp.f;
+    __syncthreads();
+    tmp = sgmScanIncBlock<OP, char>(shmem_red, shmem_flg, threadIdx.x);
+    __syncthreads();
+    shmem_red[threadIdx.x] = tmp.v;
+    shmem_flg[threadIdx.x] = tmp.f;
+    __syncthreads();
 
-    // virtualization loop of count `num_seq_chunks`. Each iteration processes
-    //   `blockDim.x * CHUNK` elements, i.e., `CHUNK` elements per thread.
-    for(int seq=0; seq<num_elems_per_block; seq+=num_elems_per_iter) {
-        volatile char* shmem_flg = (volatile char*)(shmem_inp + CHUNK*blockDim.x);
-
-        // 1. copy `CHUNK` input elements per thread from
-        //    global to shared memory in coalesced fashion
-        copyFromGlb2ShrMem<typename OP::InpElTp, CHUNK>
-                  (inp_block_offs+seq, N, OP::identInp(), d_inp, shmem_inp);
-        copyFromGlb2ShrMem<char, CHUNK>
-                  (inp_block_offs+seq, N, 0, d_flg, shmem_flg);
-
-        // 2. each thread sequentially reduces its `CHUNK` elements,
-        //    the result is stored in `chunk` array (mapped to registers),
-        //    and `tmp` denotes the reduced result.
-        FVTup tmp = LiftOP<OP>::identity();
-        uint32_t shmem_offset = threadIdx.x * CHUNK;
-        #pragma unroll
-        for (uint32_t i = 0; i < CHUNK; i++) {
-            typename OP::InpElTp elm = shmem_inp[shmem_offset + i];
-            char                 flg = shmem_flg[shmem_offset + i];
-            FVTup red(flg, OP::mapFun(elm));
-            tmp = LiftOP<OP>::apply(tmp, red);
-            chunk[i] = tmp;
-        }
-        __syncthreads();
-
-        // 3. publish in shared memory and perform intra-group scan
-        shmem_flg = (volatile char*)(shmem_red + blockDim.x);
-        shmem_red[threadIdx.x] = tmp.v;
-        shmem_flg[threadIdx.x] = tmp.f;
-        __syncthreads();
-        tmp = sgmScanIncBlock<OP,char>(shmem_red, shmem_flg, threadIdx.x);
-        __syncthreads();
-        shmem_red[threadIdx.x] = tmp.v;
-        shmem_flg[threadIdx.x] = tmp.f;
-        __syncthreads();
-
-        // 4. read the previous element and complete the scan in shared memory
-        tmp   = LiftOP<OP>::identity();
-        if (threadIdx.x > 0) {
-            tmp.v = OP::remVolatile(shmem_red[threadIdx.x-1]);
-            tmp.f = shmem_flg[threadIdx.x-1];
-        }
-        tmp   = LiftOP<OP>::apply(accum, tmp);
-        for (uint32_t i = 0; i < CHUNK; i++) {
-            chunk[i] = LiftOP<OP>::apply(tmp, chunk[i]);
-        }
-        tmp.f = shmem_flg[blockDim.x-1];
-        tmp.v = OP::remVolatile(shmem_red[blockDim.x-1]);
-        accum = LiftOP<OP>::apply(accum, tmp);
-        __syncthreads();
-
-        #pragma unroll
-        for (uint32_t i = 0; i < CHUNK; i++) {
-            shmem_red[threadIdx.x*CHUNK + i] = chunk[i].v;
-        }
-        __syncthreads();
-
-        // 5. write back to global memory in coalesced form
-        copyFromShr2GlbMem<typename OP::RedElTp, CHUNK>
-                  (inp_block_offs+seq, N, d_out, shmem_red);
+    // 4. read the previous element and complete the scan in shared memory
+    tmp = LiftOP<OP>::identity();
+    if (threadIdx.x > 0) {
+      tmp.v = OP::remVolatile(shmem_red[threadIdx.x - 1]);
+      tmp.f = shmem_flg[threadIdx.x - 1];
     }
+    tmp = LiftOP<OP>::apply(accum, tmp);
+    for (uint32_t i = 0; i < CHUNK; i++) {
+      chunk[i] = LiftOP<OP>::apply(tmp, chunk[i]);
+    }
+    tmp.f = shmem_flg[blockDim.x - 1];
+    tmp.v = OP::remVolatile(shmem_red[blockDim.x - 1]);
+    accum = LiftOP<OP>::apply(accum, tmp);
+    __syncthreads();
+
+#pragma unroll
+    for (uint32_t i = 0; i < CHUNK; i++) {
+      shmem_red[threadIdx.x * CHUNK + i] = chunk[i].v;
+    }
+    __syncthreads();
+
+    // 5. write back to global memory in coalesced form
+    copyFromShr2GlbMem<typename OP::RedElTp, CHUNK>(inp_block_offs + seq, N,
+                                                    d_out, shmem_red);
+  }
 }
 
 #endif // PBB_KERNELS
