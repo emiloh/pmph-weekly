@@ -221,10 +221,10 @@ scanIncWarp(volatile typename OP::RedElTp *ptr, const unsigned int idx) {
   const unsigned int lane = idx & (WARP - 1);
 
 #pragma unroll
-  for (unsigned int d = 0; d < lgWARP - 1; ++i) {
-    h = 2 << d;
-    if (idx >= h) {
-      ptr[idx] = ptr[idx - h] + ptr[idx];
+  for (unsigned int d = 0; d < lgWARP; ++d) {
+    unsigned int h = 1 << d;
+    if (lane >= h) {
+      ptr[idx] = OP::apply(ptr[idx - h], ptr[idx]);
     }
   }
 
@@ -474,11 +474,11 @@ __device__ inline void copyFromGlb2ShrMem(const uint32_t glb_offs,
                                           T *d_inp, volatile T *shmem_inp) {
 #pragma unroll
   for (uint32_t i = 0; i < CHUNK; i++) {
-#if 0 then
-	    uint32_t loc_ind = i * CHUNK + threadIdx.x;
-#else
+  #if 0 
+    uint32_t loc_ind = i * blockDim.x + threadIdx.x;
+  #else
     uint32_t loc_ind = threadIdx.x * CHUNK + i;
-#endif
+  #endif
     uint32_t glb_ind = glb_offs + loc_ind;
     T elm = ne;
     if (glb_ind < N) {
@@ -507,11 +507,11 @@ __device__ inline void copyFromShr2GlbMem(const uint32_t glb_offs,
                                           volatile T *shmem_red) {
 #pragma unroll
   for (uint32_t i = 0; i < CHUNK; i++) {
-#if 0 then 
-	    uint32_t loc_ind = i * CHUNK + threadIdx.x;
-#else
+  #if 0 
+    uint32_t loc_ind = i * blockDim.x + threadIdx.x;
+  #else
     uint32_t loc_ind = threadIdx.x * CHUNK + i;
-#endif
+  #endif
     uint32_t glb_ind = glb_offs + loc_ind;
     if (glb_ind < N) {
       T elm = const_cast<const T &>(shmem_red[loc_ind]);
