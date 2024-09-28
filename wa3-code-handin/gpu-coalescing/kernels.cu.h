@@ -100,9 +100,9 @@ __global__ void transKernel(ElTp *A_tr, ElTp *B_tr, uint32_t num_rows,
 
   ElTp acc = 0;
   for (uint32_t i = 0; i < num_cols; ++i) {
-    ElTp el = A[gid * num_rows + i];
+    ElTp el = A_tr[i * num_rows + gid];
     acc = sqrt(acc) + el * el;
-    B[gid * num_rows + i] = acc;
+    B_tr[i * num_rows + gid] = acc;
   }
 }
 
