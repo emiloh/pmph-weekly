@@ -35,7 +35,7 @@ __global__ void multiStepKernel(uint32_t *inp_inds, float *inp_vals,
      * within the bounds of the current chunk
      * (less than UB and greater or equal to LB.)
      ************************/
-    if (LB <= ind < UB) {
+    if (LB <= ind && ind < UB) {
       float val = inp_vals[gid];
       atomicAdd((float *)&hist[ind], val);
     }
