@@ -96,7 +96,16 @@ __global__ void mmmSymBlkRegInnSeqKer(ElTp* A, ElTp* B, ElTp* C, int heightA, in
        * 4. Coalesced access to A essentially means that indexing in A
        *      should expand to something like: A[ ... + threadIdx.x]
        **************************************************************/
-      
+    for(int i = 0; i < Ry; ++i){
+      unsigned int indy_loc = i * Ty + threadIdx.y;
+      unsigned int indx_loc = threadIdx.x;
+      unsigned int flat_ind = (iii + indy_loc) * widthA + (kk + indx_loc); 
+      if ((iii + indy_loc) < heightA && (kk + indx_loc) < widthA){
+      	Aloc[indy_loc][indx_loc] = A[flat_ind];
+      } else {
+      	Aloc[indy_loc][indx_loc] = 0;
+      }
+    } 
        // Please implement Task 3.1.1 here
 
       /***************************************
@@ -125,7 +134,16 @@ __global__ void mmmSymBlkRegInnSeqKer(ElTp* A, ElTp* B, ElTp* C, int heightA, in
        *      Bloc is a two-dimensional array 
        *      (see definitiona at the begining of kernels).
        **************************************************************/
-
+     for(int j = 0; j < Rx; ++j){
+       unsigned int indy_loc = threadIdx.y;
+       unsigned int indx_loc = j * Tx + threadIdx.x;
+       unsigned int flat_ind = (kk + indy_loc) * widthB + (jjj + indx_loc);
+       if ((kk + indy_loc) < widthA && (jjj + indx_loc) < widthB){
+         Bloc[indy_loc][indx_loc] = B[flat_ind];
+       } else {
+         Bloc[indy_loc][indx_loc] = 0;
+       }
+     }
       // Please implement Task 3.1.2 here
 
       __syncthreads();
@@ -146,13 +164,9 @@ __global__ void mmmSymBlkRegInnSeqKer(ElTp* A, ElTp* B, ElTp* C, int heightA, in
                  * This assumes of course that you have 
                  *   already solved Task 3.1.
                  ***************************************/
-                  if( (iii + threadIdx.y*Ry + i < heightA) &&
-                      (kk+k < widthA) &&
-                      (jjj + threadIdx.x*Rx + j < widthB)
-                    )
                   css[i][j] +=  
-                    A[ (iii + threadIdx.y*Ry + i)*widthA + (kk + k)] *
-                    B[ (kk+k)*widthB + jjj + threadIdx.x*Rx + j] ;
+                    Aloc[threadIdx.y * Ry  + i][k] *
+                    Bloc[k][threadIdx.x * Rx + j];
               }
           }
       }
